@@ -1,0 +1,16 @@
+{
+  "name": "tiktok-battle",
+  "version": "1.0.0",
+  "description": "Juego de batalla TikTok",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.22.1",
+    "socket.io": "^4.8.3",
+    "tiktok-live-connector": "^2.1.1-beta1",
+    "dotenv": "^16.0.0",
+    "node-cache": "^5.1.2"
+  }
+}
