@@ -154,7 +154,5 @@ async function startServer() {
     }
 }
 
-const port = await findAvailablePort(3000);
-server.listen(port, ...);
-// Iniciar el servidor
+// 🚀 INICIAR EL SERVIDOR (SOLO UNA VEZ)
 startServer();
