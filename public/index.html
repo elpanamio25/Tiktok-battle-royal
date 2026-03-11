@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Juego TikTok Battle</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #1a1a1a;
+            color: white;
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+        }
+        
+        #gameContainer {
+            display: flex;
+            gap: 20px;
+        }
+        
+        #arena {
+            border: 2px solid #ff0050;
+            background: #2a2a2a;
+        }
+        
+        #sidebar {
+            width: 250px;
+            background: #333;
+            padding: 15px;
+            border-radius: 10px;
+        }
+        
+        #timer {
+            font-size: 20px;
+            color: #ff0050;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        #board {
+            background: #444;
+            padding: 15px;
+            border-radius: 8px;
+            min-height: 200px;
+        }
+        
+        #results {
+            display: none;
+            background: #ff0050;
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+            text-align: center;
+            font-size: 24px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="arena" width="800" height="600"></canvas>
+        <div id="sidebar">
+            <div id="timer">Conectando...</div>
+            <h3>🏆 Ranking</h3>
+            <div id="board">Esperando jugadores...</div>
+            <div id="results"></div>
+        </div>
+    </div>
+
+    <!-- Librerías necesarias -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    
+    <!-- Archivos de conexión -->
+    <script src="connection.js"></script>
+    <script src="app.js"></script>
+    
+    <script>
+        // Esperar a que todo esté cargado
+        document.addEventListener('DOMContentLoaded', function() {
+            const canvas = document.getElementById("arena");
+            const ctx = canvas.getContext("2d");
+
+            let avatars = [];
+            let battleTimer = 10;
+            let battleActive = false;
+            let connectionEstablished = false;
+            let tiktokConnection = null;
+
+            class Avatar {
+                constructor(username, avatarUrl) {
+                    this.username = username;
+                    this.x = Math.random() * (canvas.width - 100) + 50;
+                    this.y = Math.random() * (canvas.height - 100) + 50;
+                    this.hp = 100;
+                    this.maxHp = 300;
+                    this.size = 30;
+                    this.speed = 1.8;
+                    this.kills = 0;
+                    this.img = new Image();
+                    this.img.crossOrigin = "Anonymous";
+                    this.img.src = avatarUrl || 'https://via.placeholder.com/100';
+                    
+                    this.img.onerror = () => {
+                        this.img.src = 'https://via.placeholder.com/100';
+                    };
+                }
+
+                draw() {
+                    ctx.save();
+                    ctx.translate(this.x, this.y);
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.size, 0, Math.PI * 2);
+                    ctx.clip();
+                    ctx.drawImage(this.img, -this.size, -this.size, this.size * 2, this.size * 2);
+                    ctx.restore();
+
+                    ctx.fillStyle = "red";
+                    ctx.fillRect(this.x - 30, this.y - 45, 60, 6);
+                    ctx.fillStyle = "lime";
+                    ctx.fillRect(this.x - 30, this.y - 45, (this.hp / this.maxHp) * 60, 6);
+
+                    ctx.fillStyle = "white";
+                    ctx.font = "bold 14px Arial";
+                    ctx.textAlign = "center";
+                    ctx.fillText(this.username, this.x, this.y + this.size + 16);
+                }
+
+                update() {
+                    if (!battleActive || avatars.length < 1) return;
+                    let closest = null;
+                    let distMin = Infinity;
+                    for (let other of avatars) {
+                        if (other === this) continue;
+                        let dx = other.x - this.x;
+                        let dy = other.y - this.y;
+                        let dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist < distMin) { 
+                            distMin = dist; 
+                            closest = other; 
+                        }
+                    }
+                    if (closest && distMin > 0) {
+                        this.x += (closest.x - this.x) / distMin * this.speed;
+                        this.y += (closest.y - this.y) / distMin * this.speed;
+                        
+                        this.x = Math.max(this.size, Math.min(canvas.width - this.size, this.x));
+                        this.y = Math.max(this.size, Math.min(canvas.height - this.size, this.y));
+                    } else if (avatars.length === 1) {
+                        // Movimiento aleatorio para 1 jugador
+                        this.x += (Math.random() - 0.5) * this.speed * 2;
+                        this.y += (Math.random() - 0.5) * this.speed * 2;
+                        this.x = Math.max(this.size, Math.min(canvas.width - this.size, this.x));
+                        this.y = Math.max(this.size, Math.min(canvas.height - this.size, this.y));
+                    }
+                }
+            }
+
+            function checkCollisions() {
+                for (let i = 0; i < avatars.length; i++) {
+                    for (let j = i + 1; j < avatars.length; j++) {
+                        let a = avatars[i]; 
+                        let b = avatars[j];
+                        let dx = b.x - a.x; 
+                        let dy = b.y - a.y;
+                        let dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist < a.size + b.size) {
+                            a.hp -= 1.5; 
+                            b.hp -= 1.5;
+                            if (a.hp <= 0) b.kills++;
+                            if (b.hp <= 0) a.kills++;
+                        }
+                    }
+                }
+            }
+
+            function gameLoop() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                avatars.forEach(av => { 
+                    av.update(); 
+                    av.draw(); 
+                });
+                if (battleActive) checkCollisions();
+                avatars = avatars.filter(a => a.hp > 0);
+                updateBoard();
+                if (battleActive && avatars.length === 1 && connectionEstablished) finishBattle();
+                requestAnimationFrame(gameLoop);
+            }
+
+            function updateBoard() {
+                let sorted = [...avatars].sort((a, b) => b.kills - a.kills);
+                let html = sorted.slice(0, 5).map(p => `${p.username} 💀 ${p.kills}`).join("<br>");
+                document.getElementById("board").innerHTML = html || "Esperando jugadores...";
+            }
+
+            function finishBattle() {
+                battleActive = false;
+                let winner = avatars[0];
+                document.getElementById("results").innerHTML = winner ? `🏆 GANADOR: ${winner.username}` : "FIN";
+                document.getElementById("results").style.display = "block";
+                setTimeout(() => {
+                    avatars = [];
+                    document.getElementById("results").style.display = "none";
+                    battleTimer = 10;
+                }, 5000);
+            }
+
+            // --- CONEXIÓN CON DIAGNÓSTICO ---
+            setTimeout(() => {
+                const username = prompt("🎮 ¿Qué usuario de TikTok está EN VIVO?", "");
+                if (username) {
+                    document.getElementById("timer").innerHTML = `Conectando a @${username}...`;
+                    
+                    tiktokConnection = new TikTokIOConnection();
+                    
+                    // Eventos de diagnóstico
+                    tiktokConnection.socket.on('connect', () => {
+                        console.log("✅ Socket conectado al servidor");
+                    });
+                    
+                    tiktokConnection.socket.on('connect_error', (error) => {
+                        console.error("❌ Error de conexión con servidor:", error);
+                        document.getElementById("timer").innerHTML = "❌ No se puede conectar al servidor. ¿Está corriendo node server.js?";
+                    });
+                    
+                    tiktokConnection.on("tiktokConnected", () => {
+                        connectionEstablished = true;
+                        document.getElementById("timer").innerHTML = "✅ Conectado a TikTok. ¡Esperando primer comentario!";
+                        console.log("✅ Conectado a TikTok");
+                    });
+
+                    tiktokConnection.on("tiktokDisconnected", (errMsg) => {
+                        connectionEstablished = false;
+                        document.getElementById("timer").innerHTML = "❌ " + (errMsg || "Desconectado");
+                        console.error("❌ TikTok desconectado:", errMsg);
+                    });
+
+                    tiktokConnection.on("chat", (data) => {
+                        if (!connectionEstablished) return;
+                        const userId = data.uniqueId;
+                        const userImg = data.profilePictureUrl;
+
+                        if (userId && !avatars.find(a => a.username === userId)) {
+                            avatars.push(new Avatar(userId, userImg));
+                            console.log(`➕ Nuevo jugador: ${userId}`);
+                            document.getElementById("timer").innerHTML = `👤 ¡${userId} se unió! Batalla en ${battleTimer}s`;
+                        }
+                    });
+
+                    tiktokConnection.on("like", (data) => {
+                        const userId = data.uniqueId;
+                        let av = avatars.find(a => a.username === userId);
+                        if (av) {
+                            av.hp = Math.min(av.hp + (data.likeCount * 2), av.maxHp);
+                            console.log(`❤️ Like de ${userId}: +${data.likeCount * 2} HP`);
+                        }
+                    });
+
+                    // Intentar conectar
+                    tiktokConnection.connect(username, {}).catch(err => {
+                        document.getElementById("timer").innerHTML = "❌ Error: " + err;
+                        console.error("❌ Error de conexión:", err);
+                    });
+                    
+                } else {
+                    document.getElementById("timer").innerHTML = "⏸️ Esperando usuario...";
+                }
+            }, 500);
+
+            // Timer para inicio de batalla
+            setInterval(() => {
+                if (connectionEstablished && !battleActive && avatars.length >= 1) {
+                    battleTimer--;
+                    document.getElementById("timer").innerHTML = `⚔️ Batalla en ${battleTimer}s (${avatars.length} jugador${avatars.length !== 1 ? 'es' : ''})`;
+                    if (battleTimer <= 0) {
+                        battleActive = true;
+                        document.getElementById("timer").innerHTML = "⚔️ ¡COMBATE INICIADO!";
+                    }
+                }
+            }, 1000);
+
+            // Iniciar el juego
+            gameLoop();
+        });
+    </script>
+</body>
+</html>
