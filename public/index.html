@@ -74,9 +74,10 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     
-    <!-- Archivos de conexión -->
+    <!-- Solo connection.js es necesario, app.js NO (causa errores) -->
     <script src="connection.js"></script>
-    <script src="app.js"></script>
+    <!-- app.js está desactivado porque tu juego ya maneja los eventos -->
+    <!-- <script src="app.js"></script> -->
     
     <script>
         // Esperar a que todo esté cargado
