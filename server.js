@@ -125,7 +125,6 @@ function findAvailablePort(startPort, maxAttempts = 100) {
 // 🎯 INICIAR SERVIDOR CON BÚSQUEDA AUTOMÁTICA DE PUERTO
 async function startServer() {
     try {
-        // Puerto inicial
         const startPort = 3000;
         
         console.log('🔍 Buscando puerto disponible...');
@@ -140,7 +139,6 @@ async function startServer() {
             console.log(`   🎥 OBS:         http://localhost:${port}/obs.html`);
             console.log('='.repeat(50) + '\n');
             
-            // Guardar el puerto en una variable global
             process.env.ACTUAL_PORT = port;
         });
         
@@ -154,5 +152,5 @@ async function startServer() {
     }
 }
 
-// 🚀 INICIAR EL SERVIDOR (SOLO UNA VEZ - ESTA ES LA ÚNICA LÍNEA QUE DEBE ESTAR AL FINAL)
+// 🚀 INICIAR EL SERVIDOR
 startServer();
